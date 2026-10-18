@@ -1,0 +1,271 @@
+window.CAMPUS_DATA = {
+  campus: '南湖大学（示例）',
+  isDemo: true,
+  halls: ['南苑食堂', '北苑食堂', '湖畔食堂'],
+  dishes: [
+    {
+      id: 1,
+      name: '宫保鸡丁饭',
+      hall: '南苑食堂',
+      floor: '一楼',
+      stall: '06号·川味小炒',
+      price: 13,
+      rating: 4.8,
+      reviewCount: 126,
+      category: '米饭',
+      tags: ['下饭', '分量足', '人气菜'],
+      spicy: 1,
+      wait: 8,
+      isNew: false,
+      image: 'chicken',
+      note: '鸡丁多，花生脆，酱汁拌饭刚刚好。',
+      caution: '午间要排一会儿，怕甜可以先跟阿姨说。',
+      reviews: [
+        { author: '小林同学', rating: 5, text: '13块吃得很饱，鸡肉不是只有两三块。喜欢把最后一口饭拌进酱里。', time: '示例点评' },
+        { author: '周三不早八', rating: 4, text: '微辣带一点甜，12点去等了八分钟。想赶课建议提前来。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 2,
+      name: '番茄牛腩面',
+      hall: '北苑食堂',
+      floor: '二楼',
+      stall: '12号·一碗好面',
+      price: 16,
+      rating: 4.9,
+      reviewCount: 182,
+      category: '面食',
+      tags: ['汤面', '不辣', '牛腩软烂'],
+      spicy: 0,
+      wait: 6,
+      isNew: false,
+      image: 'noodles',
+      note: '番茄汤酸甜，牛腩炖得软，天凉时很合适。',
+      caution: '默认面量偏多，小饭量可以点少面。',
+      reviews: [
+        { author: '阿禾', rating: 5, text: '汤里能吃到番茄块，牛腩也不塞牙。没加辣，正好能喝汤。', time: '示例点评' },
+        { author: '图书馆常驻', rating: 5, text: '16块有五六块牛腩，够一顿。现煮会等几分钟，别卡着上课时间买。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 3,
+      name: '香煎鸡腿饭',
+      hall: '湖畔食堂',
+      floor: '一楼',
+      stall: '03号·铁板厨房',
+      price: 15,
+      rating: 4.7,
+      reviewCount: 74,
+      category: '米饭',
+      tags: ['新菜尝鲜', '外脆里嫩', '现煎'],
+      spicy: 0,
+      wait: 10,
+      isNew: true,
+      image: 'chicken',
+      note: '一整块去骨鸡腿，皮煎得脆，配菜清爽。',
+      caution: '现煎出餐慢，酱汁略咸，建议分开放。',
+      reviews: [
+        { author: '盐汽水', rating: 5, text: '鸡皮真的是脆的，肉也没煎干。15块还有两样配菜，会再点。', time: '示例点评' },
+        { author: '饭点观察员', rating: 4, text: '前面三个人就等了十分钟，好吃但不适合赶时间。酱要少一点更好。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 4,
+      name: '黑椒牛肉拌饭',
+      hall: '南苑食堂',
+      floor: '二楼',
+      stall: '09号·石锅拌饭',
+      price: 18,
+      rating: 4.5,
+      reviewCount: 95,
+      category: '米饭',
+      tags: ['黑椒味', '配菜丰富', '热乎'],
+      spicy: 1,
+      wait: 7,
+      isNew: false,
+      image: 'beef',
+      note: '牛肉配豆芽、胡萝卜和煎蛋，拌开口感丰富。',
+      caution: '锅底很烫；牛肉量一般，加肉要另付费。',
+      reviews: [
+        { author: '卷不动了', rating: 5, text: '锅底那层焦饭很香，配菜也挺多。黑椒有点冲，吃不了胡椒的注意。', time: '示例点评' },
+        { author: '晚饭不将就', rating: 4, text: '味道不错，18块在食堂算稍贵。牛肉能再多一点就好了。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 5,
+      name: '柠檬鸡胸轻食碗',
+      hall: '湖畔食堂',
+      floor: '二楼',
+      stall: '08号·绿叶食集',
+      price: 19,
+      rating: 4.4,
+      reviewCount: 48,
+      category: '轻食',
+      tags: ['新菜尝鲜', '清爽', '酱料另放'],
+      spicy: 0,
+      wait: 4,
+      isNew: true,
+      image: 'salad',
+      note: '鸡胸肉不柴，南瓜和糙米让这一碗更顶饱。',
+      caution: '蔬菜是冷的，饭量大可能还要加主食。',
+      reviews: [
+        { author: '操场第三圈', rating: 5, text: '鸡胸比想象中嫩，酱汁单独装，可以自己控制。练完来吃挺方便。', time: '示例点评' },
+        { author: '一颗小南瓜', rating: 4, text: '菜很清爽，但我下午有体育课，这一碗没完全吃饱，建议加份玉米。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 6,
+      name: '白菜猪肉水饺',
+      hall: '北苑食堂',
+      floor: '一楼',
+      stall: '05号·北方水饺',
+      price: 12,
+      rating: 4.6,
+      reviewCount: 138,
+      category: '面食',
+      tags: ['12只一份', '现煮', '实惠'],
+      spicy: 0,
+      wait: 6,
+      isNew: false,
+      image: 'dumpling',
+      note: '皮薄馅足，一份12只，酸汤可以另选。',
+      caution: '最后几只容易粘在一起，打包路远不太合适。',
+      reviews: [
+        { author: '小北', rating: 5, text: '12块12只，肉馅挺实在。醋和蒜泥在旁边自取，很有家里那味。', time: '示例点评' },
+        { author: '不吃香菜', rating: 4, text: '现煮的皮很软，堂食比打包好。打包回宿舍底下有两只粘破了。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 7,
+      name: '椒麻鱼片饭',
+      hall: '南苑食堂',
+      floor: '一楼',
+      stall: '11号·小份鲜鱼',
+      price: 17,
+      rating: 4.3,
+      reviewCount: 36,
+      category: '米饭',
+      tags: ['新菜尝鲜', '麻香', '鱼片嫩'],
+      spicy: 2,
+      wait: 9,
+      isNew: true,
+      image: 'fish',
+      note: '鱼片滑嫩，青花椒麻香明显，配饭很够味。',
+      caution: '比普通微辣更麻，鱼片仍需留意细刺。',
+      reviews: [
+        { author: '辣椒收藏家', rating: 5, text: '麻味挺足，鱼片没有煮碎。点微辣对我来说正好，米饭吃得一粒不剩。', time: '示例点评' },
+        { author: '随便吃点', rating: 3, text: '我平时不怎么吃辣，这份有点扛不住。鱼肉很嫩，但吃的时候还是要留意刺。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 8,
+      name: '红烧肉双拼饭',
+      hall: '北苑食堂',
+      floor: '二楼',
+      stall: '07号·家常小碗菜',
+      price: 14,
+      rating: 4.2,
+      reviewCount: 109,
+      category: '米饭',
+      tags: ['家常味', '双拼', '分量足'],
+      spicy: 0,
+      wait: 3,
+      isNew: false,
+      image: 'pork',
+      note: '红烧肉搭一份时蔬，肉炖得软，出餐快。',
+      caution: '肥肉比例偏高，酱汁偏甜。',
+      reviews: [
+        { author: '今天有实验', rating: 4, text: '打完就能走，赶下午实验很方便。肉软烂，不过有两块肥肉比较多。', time: '示例点评' },
+        { author: '米饭半碗', rating: 4, text: '14块配肉配菜挺划算，口味偏甜。瘦肉爱好者可以问问当天能不能挑。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 9,
+      name: '葱油拌面',
+      hall: '湖畔食堂',
+      floor: '一楼',
+      stall: '02号·面面俱到',
+      price: 8,
+      rating: 4.4,
+      reviewCount: 162,
+      category: '面食',
+      tags: ['10元以内', '葱香', '出餐快'],
+      spicy: 0,
+      wait: 3,
+      isNew: false,
+      image: 'noodles',
+      note: '葱香足，8块一碗，预算紧的时候很合适。',
+      caution: '基础款没有肉蛋，单吃配菜少。',
+      reviews: [
+        { author: '月末省钱中', rating: 5, text: '8块钱吃饱没问题，拌面也不坨。加个蛋另算，点之前看一下价格。', time: '示例点评' },
+        { author: '路过一碗面', rating: 4, text: '闻着很香，三分钟就拿到了。只有面和葱，想吃得丰富点得自己加菜。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 10,
+      name: '香菇时蔬杂粮饭',
+      hall: '南苑食堂',
+      floor: '二楼',
+      stall: '04号·一蔬一饭',
+      price: 11,
+      rating: 4.1,
+      reviewCount: 57,
+      category: '轻食',
+      tags: ['清淡', '蔬菜多', '平价'],
+      spicy: 0,
+      wait: 2,
+      isNew: false,
+      image: 'rice',
+      note: '香菇、西兰花配杂粮饭，油不多，吃着清爽。',
+      caution: '整体口味淡，杂粮饭口感偏硬。',
+      reviews: [
+        { author: '早睡实践者', rating: 4, text: '11块有三种菜，想吃清淡的时候会选。米饭嚼起来比普通白米饭硬。', time: '示例点评' },
+        { author: '多来点青菜', rating: 4, text: '不用排队很省心，香菇挺入味。不过饭量大的同学可能要再加半份饭。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 11,
+      name: '孜然鸡柳卷',
+      hall: '湖畔食堂',
+      floor: '一楼',
+      stall: '10号·街角小食',
+      price: 10,
+      rating: 3.4,
+      reviewCount: 64,
+      category: '小吃',
+      tags: ['便携', '孜然味', '课间加餐'],
+      spicy: 1,
+      wait: 12,
+      isNew: false,
+      image: 'chicken',
+      note: '孜然味浓，卷饼拿着吃方便，适合加餐。',
+      caution: '鸡柳量偏少，晚高峰排队久，一份不太够当正餐。',
+      reviews: [
+        { author: '赶课小队', rating: 3, text: '以为卷饼能很快拿走，结果排了十多分钟。鸡柳偏少，吃完还是饿。', time: '示例点评' },
+        { author: '晚课之前', rating: 4, text: '饼皮挺软，孜然味我喜欢。10块当加餐可以，当晚饭就不太够。', time: '示例点评' }
+      ]
+    },
+    {
+      id: 12,
+      name: '铁板肥牛饭',
+      hall: '北苑食堂',
+      floor: '二楼',
+      stall: '15号·滋滋铁板',
+      price: 22,
+      rating: 3.1,
+      reviewCount: 83,
+      category: '米饭',
+      tags: ['铁板现做', '重口味', '大份米饭'],
+      spicy: 1,
+      wait: 15,
+      isNew: false,
+      image: 'beef',
+      note: '铁板现做，米饭给得多，酱香比较浓。',
+      caution: '22元肉量偏少，酱汁偏咸，午高峰等候较长。',
+      reviews: [
+        { author: '认真吃饭', rating: 3, text: '米饭确实多，但肥牛只有薄薄一层。22块这个价，感觉不太值。', time: '示例点评' },
+        { author: '午休很短', rating: 3, text: '12点过去等了十五分钟，酱汁有点咸。赶课或者口味清淡的话建议换一份。', time: '示例点评' }
+      ]
+    }
+  ]
+};

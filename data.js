@@ -17,7 +17,7 @@ window.CAMPUS_DATA = {
       spicy: 1,
       wait: 8,
       isNew: false,
-      image: 'chicken',
+      image: 'gongbao',
       note: '鸡丁多，花生脆，酱汁拌饭刚刚好。',
       caution: '午间要排一会儿，怕甜可以先跟阿姨说。',
       reviews: [
@@ -39,7 +39,7 @@ window.CAMPUS_DATA = {
       spicy: 0,
       wait: 6,
       isNew: false,
-      image: 'noodles',
+      image: 'noodle-beef',
       note: '番茄汤酸甜，牛腩炖得软，天凉时很合适。',
       caution: '默认面量偏多，小饭量可以点少面。',
       reviews: [
@@ -49,23 +49,23 @@ window.CAMPUS_DATA = {
     },
     {
       id: 3,
-      name: '香煎鸡腿饭',
+      name: '香酥鸡块饭',
       hall: '湖畔食堂',
       floor: '一楼',
-      stall: '03号·铁板厨房',
+      stall: '03号·热食厨房',
       price: 15,
       rating: 4.7,
       reviewCount: 74,
       category: '米饭',
-      tags: ['新菜尝鲜', '外脆里嫩', '现煎'],
+      tags: ['新菜尝鲜', '外酥里嫩', '现炸'],
       spicy: 0,
       wait: 10,
       isNew: true,
       image: 'chicken',
-      note: '一整块去骨鸡腿，皮煎得脆，配菜清爽。',
-      caution: '现煎出餐慢，酱汁略咸，建议分开放。',
+      note: '鸡块外酥里嫩，配米饭和时蔬，分量够一顿。',
+      caution: '现炸出餐慢，蘸酱偏咸，可以让窗口少放一点。',
       reviews: [
-        { author: '盐汽水', rating: 5, text: '鸡皮真的是脆的，肉也没煎干。15块还有两样配菜，会再点。', time: '示例点评' },
+        { author: '盐汽水', rating: 5, text: '鸡块外壳挺脆，里面也不干。15块还有两样配菜，会再点。', time: '示例点评' },
         { author: '饭点观察员', rating: 4, text: '前面三个人就等了十分钟，好吃但不适合赶时间。酱要少一点更好。', time: '示例点评' }
       ]
     },
@@ -83,7 +83,7 @@ window.CAMPUS_DATA = {
       spicy: 1,
       wait: 7,
       isNew: false,
-      image: 'beef',
+      image: 'beef-bibimbap',
       note: '牛肉配豆芽、胡萝卜和煎蛋，拌开口感丰富。',
       caution: '锅底很烫；牛肉量一般，加肉要另付费。',
       reviews: [
@@ -127,7 +127,7 @@ window.CAMPUS_DATA = {
       spicy: 0,
       wait: 6,
       isNew: false,
-      image: 'dumpling',
+      image: 'water-dumpling',
       note: '皮薄馅足，一份12只，酸汤可以另选。',
       caution: '最后几只容易粘在一起，打包路远不太合适。',
       reviews: [
@@ -193,7 +193,7 @@ window.CAMPUS_DATA = {
       spicy: 0,
       wait: 3,
       isNew: false,
-      image: 'noodles',
+      image: 'scallion-noodle',
       note: '葱香足，8块一碗，预算紧的时候很合适。',
       caution: '基础款没有肉蛋，单吃配菜少。',
       reviews: [
@@ -225,7 +225,7 @@ window.CAMPUS_DATA = {
     },
     {
       id: 11,
-      name: '孜然鸡柳卷',
+      name: '孜然鸡柳',
       hall: '湖畔食堂',
       floor: '一楼',
       stall: '10号·街角小食',
@@ -233,16 +233,16 @@ window.CAMPUS_DATA = {
       rating: 3.4,
       reviewCount: 64,
       category: '小吃',
-      tags: ['便携', '孜然味', '课间加餐'],
+      tags: ['小份', '孜然味', '课间加餐'],
       spicy: 1,
       wait: 12,
       isNew: false,
       image: 'chicken',
-      note: '孜然味浓，卷饼拿着吃方便，适合加餐。',
+      note: '孜然味浓，装小盒方便带走，适合加餐。',
       caution: '鸡柳量偏少，晚高峰排队久，一份不太够当正餐。',
       reviews: [
-        { author: '赶课小队', rating: 3, text: '以为卷饼能很快拿走，结果排了十多分钟。鸡柳偏少，吃完还是饿。', time: '示例点评' },
-        { author: '晚课之前', rating: 4, text: '饼皮挺软，孜然味我喜欢。10块当加餐可以，当晚饭就不太够。', time: '示例点评' }
+        { author: '赶课小队', rating: 3, text: '以为鸡柳能很快拿走，结果排了十多分钟。鸡柳偏少，吃完还是饿。', time: '示例点评' },
+        { author: '晚课之前', rating: 4, text: '炸得挺酥，孜然味我喜欢。10块当加餐可以，当晚饭就不太够。', time: '示例点评' }
       ]
     },
     {

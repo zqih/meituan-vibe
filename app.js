@@ -1,328 +1,260 @@
 (() => {
   'use strict';
-  const { dishes, halls } = window.CAMPUS_DATA;
+  const { dishes } = window.CAMPUS_DATA;
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
-  const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
   const key = 'campus-food-v1';
   const ids = new Set(dishes.map((dish) => dish.id));
-  let saved = [], reviews = [], persistenceFailed = false;
+  const validDate = (time) => Number.isFinite(time) && time >= 0 && time <= 8.64e15;
+  let saved = [], reviews = [];
   try {
     const stored = JSON.parse(localStorage.getItem(key) || '{}');
     saved = Array.isArray(stored.saved) ? [...new Set(stored.saved.filter((id) => ids.has(id)))] : [];
-    reviews = Array.isArray(stored.reviews) ? stored.reviews.filter((review) => review && ids.has(review.dishId) && Number.isInteger(review.rating) && review.rating >= 1 && review.rating <= 5 && typeof review.text === 'string' && review.text.trim().length >= 5 && review.text.length <= 300 && typeof review.id === 'string' && Number.isFinite(review.createdAt) && review.createdAt >= 0 && review.createdAt <= 8.64e15).slice(0, 200) : [];
-  } catch { /* A fresh session still works if browser storage is unavailable. */ }
-  const state = { view: 'discover', hall: 'all', category: 'all', price: 'all', query: '', sort: 'recommended', shortcut: '', rank: 'good' };
+    reviews = Array.isArray(stored.reviews) ? stored.reviews.filter((r) => r && ids.has(r.dishId) && Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5 && typeof r.text === 'string' && r.text.trim().length >= 5 && r.text.length <= 300 && typeof r.id === 'string' && validDate(r.createdAt)).slice(0,200) : [];
+  } catch { /* Continue without stored records when browser storage is unavailable. */ }
+  const state = { view:'discover', hall:'all', price:'all', category:'all', spicy:'all', query:'', sort:'recommended', fast:false, limit:6 };
+  let lastView = 'discover', detailId = null, modalType = '', randomLast = null, modalOpener = null, toastTimer;
   const dialog = $('#main-dialog');
-  const dialogContent = $('#dialog-content');
-  const ratingStar = '<svg class="rating-star" viewBox="0 0 20 20" aria-hidden="true"><path d="m10 1.8 2.5 5.1 5.7.8-4.1 4 .9 5.7-5-2.7-5 2.7.9-5.7-4.1-4 5.7-.8Z"/></svg>';
-  const bookmarkIcon = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3h10v14l-5-3-5 3Z"/></svg>';
-  let toastTimer, detailId = null, randomLast = null, modalType = '', modalTrigger = null;
-  const randomOptions = { budget: '20', spicy: 'all', hall: 'all' };
-
+  const content = $('#dialog-content');
+  const bookmarkIcon = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v17l-6-4-6 4Z"/></svg>';
+  function syncControls() {
+    ['hall','price','category','spicy','sort'].forEach((name) => { $('#'+name+'-filter').value=state[name]; });
+    if ($('#search-input').value!==state.query) $('#search-input').value=state.query;
+    $('#fast-filter').checked=state.fast;
+  }
+  function restoreURL() {
+    const params=new URLSearchParams(window.location.search);
+    const allowed={view:['discover','new','caution','saved'],hall:['all',...new Set(dishes.map(d=>d.hall))],price:['all','12','15','20'],category:['all',...new Set(dishes.map(d=>d.category))],spicy:['all','0','1'],sort:['recommended','price','wait']};
+    const defaults={view:'discover',hall:'all',price:'all',category:'all',spicy:'all',sort:'recommended'};
+    for(const [name,options] of Object.entries(allowed)){const value=params.get(name);state[name]=options.includes(value)?value:defaults[name];}
+    if(params.get('view')==='ranking')state.view=params.get('rank')==='caution'?'caution':'discover';
+    state.query=(params.get('q')||'').slice(0,200);
+    state.fast=params.get('fast')==='1'||params.get('shortcut')==='fast';
+    if(params.get('shortcut')==='mild'&&!params.has('spicy'))state.spicy='0';
+    state.limit=6;
+    syncControls();
+  }
+  function syncURL(push) {
+    const url=new URL(window.location.href);
+    const defaults={view:'discover',hall:'all',price:'all',category:'all',spicy:'all',sort:'recommended'};
+    for(const [name,value] of Object.entries(defaults)){if(state[name]===value)url.searchParams.delete(name);else url.searchParams.set(name,state[name]);}
+    if(state.query)url.searchParams.set('q',state.query);else url.searchParams.delete('q');
+    if(state.fast)url.searchParams.set('fast','1');else url.searchParams.delete('fast');
+    url.searchParams.delete('rank');url.searchParams.delete('shortcut');
+    if(url.href!==window.location.href)window.history[push?'pushState':'replaceState'](null,'',url);
+  }
+  const findDish = (id) => dishes.find((d) => d.id === Number(id));
+  const ownReviews = (id) => reviews.filter((r) => r.dishId === id);
+  function rating(dish) {
+    const local = ownReviews(dish.id);
+    return ((dish.rating * dish.reviewCount + local.reduce((sum,r) => sum+r.rating,0)) / (dish.reviewCount+local.length)).toFixed(1);
+  }
   function toast(message) {
     clearTimeout(toastTimer);
     $('#toast').textContent = message;
     $('#toast').classList.add('visible');
-    toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 3200);
+    toastTimer = setTimeout(() => $('#toast').classList.remove('visible'),3000);
   }
   function persist() {
-    try {
-      localStorage.setItem(key, JSON.stringify({ saved, reviews }));
-      persistenceFailed = false;
-      return true;
-    } catch {
-      persistenceFailed = true;
-      toast('未能保存，本次修改仅在当前页面保留。请检查浏览器存储权限。');
-      return false;
-    }
-  }
-  const findDish = (id) => dishes.find((dish) => dish.id === Number(id));
-  const ownReviews = (id) => reviews.filter((review) => review.dishId === id);
-  function rating(dish) {
-    const local = ownReviews(dish.id);
-    return ((dish.rating * dish.reviewCount + local.reduce((sum, review) => sum + review.rating, 0)) / (dish.reviewCount + local.length)).toFixed(1);
+    try { localStorage.setItem(key,JSON.stringify({saved,reviews})); return true; }
+    catch { toast('浏览器不允许保存，记录仅在当前页面保留。'); return false; }
   }
   function filterDishes() {
-    const query = state.query.trim().toLocaleLowerCase();
-    return dishes.filter((dish) => {
-      if (state.view === 'saved' && !saved.includes(dish.id)) return false;
-      if (state.view === 'new' && !dish.isNew) return false;
-      if (state.view === 'ranking' && (state.rank === 'caution' ? Number(rating(dish)) >= 4 : Number(rating(dish)) < 4)) return false;
-      if (state.hall !== 'all' && dish.hall !== state.hall) return false;
-      if (state.category !== 'all' && dish.category !== state.category) return false;
-      if (state.price !== 'all' && dish.price > Number(state.price)) return false;
-      if (state.shortcut === 'fast' && dish.wait > 5) return false;
-      if (state.shortcut === 'mild' && dish.spicy !== 0) return false;
-      return !query || [dish.name, dish.hall, dish.stall, dish.category, ...dish.tags].join(' ').toLocaleLowerCase().includes(query);
-    }).sort((a, b) => {
-      if (state.view === 'ranking') return state.rank === 'caution' ? Number(rating(a)) - Number(rating(b)) : Number(rating(b)) - Number(rating(a));
-      if (state.sort === 'price') return a.price - b.price || Number(rating(b)) - Number(rating(a));
-      if (state.sort === 'wait') return a.wait - b.wait || Number(rating(b)) - Number(rating(a));
-      return Number(rating(b)) - Number(rating(a)) || b.reviewCount - a.reviewCount;
+    const query = state.query.trim().toLowerCase();
+    return dishes.filter((d) =>
+      (state.view !== 'saved' || saved.includes(d.id)) &&
+      (state.view !== 'new' || d.isNew) &&
+      (state.view !== 'caution' || Number(rating(d)) < 4) &&
+      (state.hall === 'all' || d.hall === state.hall) &&
+      (state.price === 'all' || d.price <= Number(state.price)) &&
+      (state.category === 'all' || d.category === state.category) &&
+      (state.spicy === 'all' || d.spicy <= Number(state.spicy)) &&
+      (!state.fast || d.wait <= 5) &&
+      (!query || [d.name,d.hall,d.stall,d.category,...d.tags].join(' ').toLowerCase().includes(query))
+    ).sort((a,b) => {
+      if (state.sort === 'price') return a.price-b.price || Number(rating(b))-Number(rating(a));
+      if (state.sort === 'wait') return a.wait-b.wait || Number(rating(b))-Number(rating(a));
+      return state.view === 'caution' ? Number(rating(a))-Number(rating(b)) : Number(rating(b))-Number(rating(a)) || b.reviewCount-a.reviewCount;
     });
   }
   function card(dish) {
-    const isSaved = saved.includes(dish.id);
-    const caution = state.view === 'ranking' && state.rank === 'caution';
-    const badge = caution ? '<span class="dish-badge caution">注意事项</span>' : dish.isNew ? '<span class="dish-badge new">食堂上新</span>' : dish.price <= 12 ? '<span class="dish-badge">12元以内</span>' : '';
-    return `<article class="dish-card"><button class="bookmark ${isSaved ? 'saved' : ''}" data-save="${dish.id}" aria-label="${isSaved ? '取消收藏' : '收藏'}${escape(dish.name)}" aria-pressed="${isSaved}">${bookmarkIcon}</button><button class="dish-main" data-dish="${dish.id}" aria-label="查看${escape(dish.name)}详情"><div class="dish-image"><img src="./assets/${dish.image}.jpg" alt="${escape(dish.name)}的食物示意照片" width="900" height="600" loading="lazy">${badge}</div><div class="dish-info"><div class="dish-title-row"><h3>${escape(dish.name)}</h3></div><div class="dish-social"><span class="rating">${ratingStar}${rating(dish)}</span><span class="review-count">${dish.reviewCount + ownReviews(dish.id).length}条点评</span></div><p class="dish-location">${escape(dish.hall)} · ${escape(dish.floor)}${escape(dish.stall.split('·')[0])}</p><div class="dish-tags">${dish.tags.slice(0, 2).map((tag) => `<span>${escape(tag)}</span>`).join('')}</div><div class="dish-bottom"><span class="dish-price"><small>¥</small>${dish.price}<em>/份</em></span><span class="dish-wait">约${dish.wait}分钟出餐</span></div>${caution ? `<p class="dish-caution">${escape(dish.caution)}</p>` : ''}</div></button></article>`;
+    const selected = saved.includes(dish.id);
+    return '<article class="dish-card">' +
+      '<button class="bookmark '+(selected?'saved':'')+'" data-save="'+dish.id+'" aria-label="'+(selected?'取消收藏':'收藏')+escape(dish.name)+'" aria-pressed="'+selected+'">'+bookmarkIcon+'</button>' +
+      '<button class="dish-main" data-dish="'+dish.id+'" aria-label="查看'+escape(dish.name)+'详情">' +
+      '<div class="dish-image"><img src="./assets/'+dish.image+'.jpg" alt="'+escape(dish.name)+'的食物示意图" width="900" height="600" loading="lazy"></div>' +
+      '<div class="dish-info"><div class="dish-title-row"><h2>'+escape(dish.name)+'</h2><span class="dish-price"><small>¥</small>'+dish.price+'</span></div>' +
+      '<div class="dish-meta"><span>'+escape(dish.hall)+' · '+escape(dish.stall.split('·')[0])+'</span><span class="rating"><small>★</small>'+rating(dish)+'</span></div>' +
+      (state.view==='caution'?'<p class="dish-caution">'+escape(dish.caution)+'</p>':'')+'</div></button></article>';
   }
-  function syncControls() {
-    if ($('#search-input').value !== state.query) $('#search-input').value = state.query;
-    $('#category-filter').value = state.category;
-    $('#price-filter').value = state.price;
-    $('#sort-filter').value = state.sort;
-  }
-  function restoreURL() {
-    const params = new URLSearchParams(window.location.search);
-    const allowed = {
-      view: ['discover', 'ranking', 'new', 'saved'],
-      hall: ['all', ...halls], category: ['all', ...new Set(dishes.map(dish => dish.category))],
-      price: ['all', '12', '15', '20'], sort: ['recommended', 'price', 'wait'],
-      shortcut: ['', 'fast', 'mild'], rank: ['good', 'caution']
-    };
-    const defaults = { view: 'discover', hall: 'all', category: 'all', price: 'all', sort: 'recommended', shortcut: '', rank: 'good' };
-    for (const [name, values] of Object.entries(allowed)) {
-      const value = params.get(name);
-      state[name] = values.includes(value) ? value : defaults[name];
-    }
-    state.query = (params.get('q') || '').slice(0, 200);
-    syncControls();
-  }
-  function syncURL(push) {
-    const url = new URL(window.location.href);
-    const defaults = { view: 'discover', hall: 'all', category: 'all', price: 'all', sort: 'recommended', shortcut: '', rank: 'good' };
-    for (const [name, value] of Object.entries(defaults)) {
-      if (state[name] === value) url.searchParams.delete(name);
-      else url.searchParams.set(name, state[name]);
-    }
-    if (state.query) url.searchParams.set('q', state.query);
-    else url.searchParams.delete('q');
-    if (url.href !== window.location.href) window.history[push ? 'pushState' : 'replaceState'](null, '', url);
-  }
-  function render(pushHistory = false) {
-    syncControls();
-    syncURL(pushHistory);
-    $('#hero').hidden = state.view !== 'discover';
-    const titles = {
-      discover: ['按条件选菜', '全部菜品'],
-      ranking: ['按评分排序', state.rank === 'caution' ? '低分菜品' : '高分推荐'],
-      new: ['最近上新', '新菜推荐'],
-      saved: ['已收藏的菜品', '我的收藏']
-    };
-    $('#section-overline').textContent = titles[state.view][0];
-    $('#section-title').innerHTML = `${titles[state.view][1]}<span class="title-dot">.</span>`;
+  function render(pushHistory=false) {
+    syncControls();syncURL(pushHistory);
+    $('#section-title').textContent = ({discover:'今天吃什么？',new:'食堂新菜',caution:'吃前看一眼',saved:'我的收藏'})[state.view];
+    $('.menu-tabs').hidden = state.view === 'saved';
+    $('#back-to-menu').hidden = state.view !== 'saved';
+    $('#pick-button').hidden = state.view === 'caution';
+    $$('.menu-tabs [data-view]').forEach((button) => {
+      const active = button.dataset.view === state.view;
+      button.classList.toggle('active',active);
+      active ? button.setAttribute('aria-current','page') : button.removeAttribute('aria-current');
+    });
+    $('.saved-nav').setAttribute('aria-pressed',String(state.view==='saved'));
+    $('#saved-count').textContent = saved.length ? '('+saved.length+')' : '';
+    const extra = [];
+    if (state.query.trim()) extra.push('搜索“'+state.query.trim()+'”');
+    if (state.category !== 'all') extra.push(state.category);
+    if (state.spicy !== 'all') extra.push(state.spicy==='0'?'不辣':'最多微辣');
+    if (state.fast) extra.push('5分钟内出餐');
+    if (state.sort !== 'recommended') extra.push(state.sort==='price'?'低价优先':'出餐最快');
+    $('#filter-count').hidden = !extra.length;
+    $('#filter-count').textContent = extra.length;
+    $('#filter-status').hidden = !extra.length || !$('#extra-filters').hidden;
+    $('#filter-status').textContent = extra.join(' · ');
+    $('#sort-filter option[value="recommended"]').textContent = state.view==='caution'?'评分从低到高':'评分优先';
     const result = filterDishes();
-    $('#results-count').textContent = `${result.length} 道菜品`;
-    $('#rank-switch').hidden = state.view !== 'ranking';
-    $('#sort-filter').disabled = state.view === 'ranking';
-    $$('.nav-item').forEach((button) => {
-      const selected = button.dataset.view === state.view;
-      button.classList.toggle('active', selected);
-      selected ? button.setAttribute('aria-current', 'page') : button.removeAttribute('aria-current');
-    });
-    $$('[data-hall]').forEach((button) => { button.classList.toggle('selected', button.dataset.hall === state.hall); button.setAttribute('aria-pressed', String(button.dataset.hall === state.hall)); });
-    $$('[data-rank]').forEach((button) => { button.classList.toggle('selected', button.dataset.rank === state.rank); button.setAttribute('aria-pressed', String(button.dataset.rank === state.rank)); });
-    $('#saved-count').textContent = saved.length || '';
-    $$('.quick-links [data-shortcut]').forEach(button => {
-      const selected = button.dataset.shortcut === 'budget' ? state.price === '12' : state.shortcut === button.dataset.shortcut;
-      button.classList.toggle('selected', selected);
-      button.setAttribute('aria-pressed', String(selected));
-    });
-    const filters = [];
-    if (state.hall !== 'all') filters.push(state.hall);
-    if (state.category !== 'all') filters.push(state.category);
-    if (state.price !== 'all') filters.push(`${state.price}元以内`);
-    if (state.query.trim()) filters.push(`搜索“${state.query.trim()}”`);
-    if (state.shortcut === 'fast') filters.push('5分钟内出餐');
-    if (state.shortcut === 'mild') filters.push('不辣');
-    $('#active-filter').hidden = !filters.length;
-    $('#active-filter-text').textContent = filters.join(' · ');
-    if (result.length) $('#dish-grid').innerHTML = result.map(card).join('');
+    const shown = result.slice(0,state.limit);
+    if (result.length) $('#dish-grid').innerHTML = shown.map(card).join('');
     else {
-      const noSaved = state.view === 'saved' && !saved.length;
-      $('#dish-grid').innerHTML = `<div class="empty-state"><div class="empty-symbol">${noSaved ? '⌑' : '∅'}</div><h3>${noSaved ? '暂无收藏' : '未找到菜品'}</h3><p>${noSaved ? '点击菜品右上角的收藏按钮即可添加。' : '试试更换食堂或放宽预算。'}</p><button class="button outline" data-action="${noSaved ? 'discover' : 'clear'}">${noSaved ? '浏览菜品' : '清除筛选条件'}</button></div>`;
+      const noSaved = state.view==='saved' && !saved.length;
+      $('#dish-grid').innerHTML = '<div class="empty-state"><h2>'+(noSaved?'还没有收藏':'没有符合条件的菜')+'</h2><p>'+(noSaved?'点菜品右上角的收藏按钮，下次来这里找。':'换个食堂，或放宽筛选条件再看看。')+'</p><button class="button secondary" data-action="'+(noSaved?'discover':'clear')+'">'+(noSaved?'去看看菜品':'清除筛选')+'</button></div>';
     }
-    $('#menu-end').hidden = !result.length;
+    $('#show-more').hidden = result.length <= shown.length;
+    $('#show-more').textContent = '查看其余'+(result.length-shown.length)+'道菜';
+    $('#results-count').textContent = result.length && result.length<=shown.length ? '共'+result.length+'道菜' : '';
   }
   function resetFilters() {
-    Object.assign(state, { hall: 'all', category: 'all', price: 'all', query: '', sort: 'recommended', shortcut: '' });
-    $('#search-input').value = '';
-    $('#category-filter').value = 'all';
-    $('#price-filter').value = 'all';
-    $('#sort-filter').value = 'recommended';
+    Object.assign(state,{hall:'all',price:'all',category:'all',spicy:'all',query:'',sort:'recommended',fast:false,limit:6});
+    ['hall','price','category','spicy'].forEach((name) => $('#'+name+'-filter').value='all');
+    $('#search-input').value='';
+    $('#sort-filter').value='recommended';
+    $('#fast-filter').checked=false;
   }
   function navigate(view) {
-    state.view = view;
-    state.rank = 'good';
-    resetFilters();
+    if (view==='saved' && state.view==='saved') view=lastView;
+    if (view==='saved') lastView=state.view;
+    state.view=view;
+    state.limit=6;
     render(true);
-    $('#explore').scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    $('#section-title').scrollIntoView({block:'start',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+  }
+  function setFiltersOpen(open,focus=false) {
+    $('#extra-filters').hidden=!open;
+    $('#filter-toggle').setAttribute('aria-expanded',String(open));
+    render();
+    if(focus && open) $('#search-input').focus({preventScroll:true});
+  }
+  function openModal(html,label,type) {
+    if (!dialog.open) modalOpener=document.activeElement;
+    modalType=type;
+    content.innerHTML=html;
+    dialog.setAttribute('aria-label',label);
+    if(!dialog.open)dialog.showModal();
+    else $('.dialog-close').focus({preventScroll:true});
+    document.body.style.overflow='hidden';
+    dialog.scrollTop=0;
+  }
+  function closeModal() { dialog.close(); }
+  function restoreModalFocus() {
+    document.body.style.overflow='';
+    modalType='';
+    const target=modalOpener?.isConnected?modalOpener:$('#dish-grid [data-dish="'+detailId+'"]')||$('#pick-button');
+    target?.focus({preventScroll:true});
   }
   function toggleSaved(id) {
-    const dish = findDish(id);
-    if (!dish) return;
-    const wasSaved = saved.includes(dish.id);
-    saved = wasSaved ? saved.filter(value => value !== dish.id) : [...saved, dish.id];
-    const persisted = persist();
-    $('#saved-count').textContent = saved.length || '';
-    if (state.view === 'saved') {
-      render();
-      if (!dialog.open) ($(`#dish-grid [data-save="${dish.id}"]`) || $('#dish-grid .bookmark') || $('#dish-grid .empty-state button'))?.focus({ preventScroll: true });
-    }
-    $$(`[data-save="${dish.id}"]`).forEach(button => {
-      const selected = saved.includes(dish.id);
-      button.setAttribute('aria-pressed', String(selected));
-      if (button.classList.contains('bookmark')) {
-        button.classList.toggle('saved', selected);
-        button.setAttribute('aria-label', `${selected ? '取消收藏' : '收藏'}${dish.name}`);
-      } else button.textContent = selected ? '取消收藏' : '收藏菜品';
+    const dish=findDish(id);if(!dish)return;
+    const had=saved.includes(dish.id);
+    const restore=document.activeElement?.dataset.save===String(dish.id);
+    const inside=dialog.contains(document.activeElement);
+    saved=had?saved.filter((value)=>value!==dish.id):[...saved,dish.id];
+    const persisted=persist();
+    if(state.view==='saved')render();
+    $('#saved-count').textContent=saved.length?'('+saved.length+')':'';
+    $$('[data-save="'+dish.id+'"]').forEach((button)=>{
+      const selected=saved.includes(dish.id);button.setAttribute('aria-pressed',String(selected));
+      if(button.classList.contains('bookmark')){button.classList.toggle('saved',selected);button.setAttribute('aria-label',(selected?'取消收藏':'收藏')+dish.name);}
+      else button.textContent=selected?'已收藏 · 取消':'收藏';
     });
-    if (persisted) toast(wasSaved ? '已取消收藏' : '已收藏');
+    if(restore) {
+      const next=inside?dialog.querySelector('[data-save="'+dish.id+'"]'):$('#dish-grid [data-save="'+dish.id+'"]')||$('#dish-grid .empty-state button')||$('.saved-nav');
+      next?.focus({preventScroll:true});
+    }
+    if(persisted)toast(had?'已取消收藏':'已收藏');
   }
-  function openModal(html, label, type) {
-    modalType = type;
-    dialogContent.innerHTML = html;
-    dialog.setAttribute('aria-label', label);
-    if (!dialog.open) { modalTrigger = document.activeElement; dialog.showModal(); }
-    else dialog.querySelector('.dialog-close').focus({ preventScroll: true });
-    document.body.style.overflow = 'hidden';
-    dialog.scrollTop = 0;
+  function reviewHTML(review,local=false) {
+    const name=local?'我':review.author;
+    const time=local?new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric'}).format(new Date(review.createdAt)):'示例';
+    return '<article class="review-item"><div class="review-meta"><span class="review-person"><strong>'+escape(name)+'</strong><small>'+escape(time)+(local?' · 仅本机':'')+'</small></span><span class="review-stars" aria-label="'+review.rating+'星">'+'★'.repeat(review.rating)+'☆'.repeat(5-review.rating)+'</span></div><p>'+escape(review.text)+'</p>'+(local?'<button class="review-delete" data-delete-review="'+escape(review.id)+'">删除</button>':'')+'</article>';
   }
-  function closeModal() {
-    dialog.close();
-    document.body.style.overflow = '';
-    modalType = '';
-  }
-  function reviewHTML(review, local = false) {
-    const name = local ? '我' : review.author;
-    const time = local ? new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(new Date(review.createdAt)) : '';
-    return `<article class="review-item"><div class="review-meta"><span class="avatar" aria-hidden="true">${escape(name.slice(0, 1))}</span><span class="review-person"><strong>${escape(name)} ${local ? '<span class="local-badge">仅本机</span>' : ''}</strong>${time ? `<small>${escape(time)}</small>` : ''}</span><span class="review-stars" aria-label="${review.rating}星">${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</span></div><p>${escape(review.text)}</p>${local ? `<button class="review-delete" data-delete-review="${escape(review.id)}">删除我的这条点评</button>` : ''}</article>`;
-  }
-  function openDetail(id, keepPosition = false) {
-    const dish = findDish(id);
-    if (!dish) return;
-    detailId = dish.id;
-    const scroll = dialog.scrollTop;
-    const local = ownReviews(dish.id);
-    openModal(`<div class="detail-hero"><div class="detail-photo"><img src="./assets/${dish.image}.jpg" alt="${escape(dish.name)}的食物示意照片" width="900" height="600"></div><div class="detail-summary"><p class="modal-eyebrow">菜品详情</p><h2>${escape(dish.name)}</h2><p class="location">${escape(dish.hall)} · ${escape(dish.floor)}<br>${escape(dish.stall)}</p><div class="detail-rating"><span class="rating">${ratingStar}${rating(dish)}</span><span>${dish.reviewCount + local.length}条点评</span></div><div class="detail-price">¥${dish.price} <small>/ 份</small></div><div class="dish-tags">${dish.tags.map((tag) => `<span>${escape(tag)}</span>`).join('')}</div></div></div><div class="dialog-pad"><div class="detail-facts"><div><strong>${['不辣', '微辣', '中辣'][dish.spicy]}</strong><small>辣度</small></div><div><strong>约${dish.wait}分钟</strong><small>预计出餐</small></div><div><strong>${dish.category}</strong><small>菜品类型</small></div></div><div class="recommend-note"><strong>推荐理由</strong><span>${escape(dish.note)}</span></div><div class="recommend-note warning"><strong>注意事项</strong><span>${escape(dish.caution)}</span></div><div class="detail-actions"><button class="button primary" data-action="review" data-review-dish="${dish.id}">写点评</button><button class="button outline" data-save="${dish.id}" aria-pressed="${saved.includes(dish.id)}">${saved.includes(dish.id) ? '取消收藏' : '收藏菜品'}</button></div><div class="review-heading"><h3>菜品点评</h3></div>${local.map((review) => reviewHTML(review, true)).join('')}${dish.reviews.map((review) => reviewHTML(review)).join('')}<p class="detail-fineprint">你的点评仅在当前浏览器可见。</p></div>`, `${dish.name}详情`, 'detail');
-    if (keepPosition) dialog.scrollTop = scroll;
+  function openDetail(id,keepPosition=false) {
+    const d=findDish(id);if(!d)return;
+    detailId=d.id;
+    const previousScroll=dialog.scrollTop;
+    const local=ownReviews(d.id);
+    openModal('<div class="detail-photo"><img src="./assets/'+d.image+'.jpg" alt="'+escape(d.name)+'的食物示意图"></div><div class="dialog-pad"><div class="detail-heading"><h2>'+escape(d.name)+'</h2><span class="dish-price"><small>¥</small>'+d.price+'</span></div><p class="detail-location">'+escape(d.hall)+' · '+escape(d.floor)+' · '+escape(d.stall)+'</p><div class="detail-facts"><span class="rating">★ '+rating(d)+'</span><span>'+['不辣','微辣','中辣'][d.spicy]+'</span><span>约'+d.wait+'分钟</span></div><p class="detail-note">'+escape(d.note)+'</p><p class="caution-box"><strong>注意</strong>'+escape(d.caution)+'</p><div class="detail-actions"><button class="button primary" data-action="review" data-review-dish="'+d.id+'">写点评</button><button class="button secondary" data-save="'+d.id+'" aria-pressed="'+saved.includes(d.id)+'">'+(saved.includes(d.id)?'已收藏 · 取消':'收藏')+'</button></div><div class="review-heading"><h3>同学评价</h3><span>'+d.reviewCount+'条示例'+(local.length?' · '+local.length+'条本机记录':'')+'</span></div>'+local.map((r)=>reviewHTML(r,true)).join('')+d.reviews.map((r)=>reviewHTML(r)).join('')+'<p class="fineprint">价格、评分与等待时间为示例。你的点评仅保存在本机。</p></div>',d.name+'详情','detail');
+    if(keepPosition)dialog.scrollTop=previousScroll;
   }
   function openReview(id) {
-    const selected = findDish(id);
-    openModal(`<div class="dialog-pad"><h2 class="dialog-title">写点评</h2><p class="dialog-subtitle">说说口味、分量和等餐体验。</p><form id="review-form"><div class="form-field"><label class="field-label" for="review-dish">选择菜品</label><select class="form-select" id="review-dish" name="dishId" required>${dishes.map((dish) => `<option value="${dish.id}" ${dish.id === selected?.id ? 'selected' : ''}>${escape(dish.name)} · ${escape(dish.hall)}</option>`).join('')}</select></div><div class="form-field"><fieldset style="border:0;padding:0;margin:0"><legend class="field-label">评分</legend><div class="score-picker">${['不推荐', '有点失望', '还行', '值得吃', '会再来'].map((label, index) => `<label><input type="radio" name="rating" value="${index + 1}" ${index === 3 ? 'checked' : ''} required><span>${index + 1}<small>${label}</small></span></label>`).join('')}</div></fieldset></div><div class="form-field"><label class="field-label" for="review-text">点评内容</label><textarea class="review-textarea" id="review-text" name="text" minlength="5" maxlength="300" aria-describedby="review-error" placeholder="例如：分量足，口味偏咸，等餐约8分钟。" required></textarea><div class="counter-row"><span id="review-error" role="alert">5—300个字</span><span id="review-counter">0 / 300</span></div></div><p class="form-disclaimer">点评仅保存在当前浏览器，清理浏览器数据后会丢失。</p><button class="button primary form-submit" type="submit">保存点评</button></form></div>`, '写一条点评', 'review');
+    const d=findDish(id);if(!d)return;
+    openModal('<div class="dialog-pad"><h2 class="dialog-title">评价'+escape(d.name)+'</h2><form id="review-form"><input type="hidden" name="dishId" value="'+d.id+'"><fieldset style="border:0;padding:0;margin:0"><legend class="field-label">评分</legend><div class="score-picker">'+['很差','一般','还行','不错','推荐'].map((label,i)=>'<label><input type="radio" name="rating" value="'+(i+1)+'" required><span>'+(i+1)+'<small>'+label+'</small></span></label>').join('')+'</div></fieldset><label class="field-label" for="review-text">吃得怎么样？</label><textarea id="review-text" class="review-textarea" name="text" minlength="5" maxlength="300" placeholder="说说口味、分量或排队时间" required></textarea><div class="counter-row"><span id="review-error" role="alert">至少5个字</span><span id="review-counter">0 / 300</span></div><p class="fineprint">仅保存在当前浏览器，其他人不可见。</p><button class="button primary form-submit" type="submit">保存点评</button></form></div>','评价'+d.name,'review');
   }
   function submitReview(form) {
-    const values = new FormData(form);
-    const text = String(values.get('text') || '').trim();
-    const dish = findDish(values.get('dishId'));
-    const score = Number(values.get('rating'));
-    if (!dish || !Number.isInteger(score) || score < 1 || score > 5 || text.length < 5 || text.length > 300) {
-      $('#review-error').textContent = '请选择菜品并填写5—300个字的点评。';
-      $('#review-error').classList.add('form-error');
-      $('#review-text').setAttribute('aria-invalid', 'true');
-      $('#review-text').focus();
-      return;
+    const values=new FormData(form),text=String(values.get('text')||'').trim(),d=findDish(values.get('dishId')),score=Number(values.get('rating'));
+    if(!d||!Number.isInteger(score)||score<1||score>5||text.length<5||text.length>300) {
+      $('#review-error').textContent='请选择评分，写下5—300个字。';$('#review-error').classList.add('form-error');return;
     }
-    if (reviews.length >= 200) { toast('本机已保存200条点评，请先删除一些旧记录。'); return; }
-    const createdAt = Date.now();
-    reviews.unshift({ id: `${createdAt}-${Math.random().toString(36).slice(2, 9)}`, dishId: dish.id, rating: score, text, createdAt });
-    persist();
-    render();
-    openDetail(dish.id);
-    if (!persistenceFailed) toast('点评已保存在本机。');
+    if(reviews.length>=200){toast('已保存200条点评，请先删除一些记录。');return;}
+    const createdAt=Date.now();
+    reviews.unshift({id:createdAt+'-'+Math.random().toString(36).slice(2,9),dishId:d.id,rating:score,text,createdAt});
+    const persisted=persist();render();openDetail(d.id);if(persisted)toast('点评已保存在本机');
   }
-  function openRandom() {
-    randomLast = null;
-    openModal(`<div class="dialog-pad"><h2 class="dialog-title">随机选餐</h2><p class="dialog-subtitle">按条件随机推荐评分不低于4分的菜品。</p><form id="random-form"><div class="random-form"><label><span class="field-label">预算</span><select name="budget" class="form-select"><option value="12">12元以内</option><option value="15">15元以内</option><option value="20">20元以内</option><option value="all">不设上限</option></select></label><label><span class="field-label">口味</span><select name="spicy" class="form-select"><option value="all">都可以</option><option value="0">不吃辣</option><option value="1">最多微辣</option></select></label><label><span class="field-label">食堂</span><select name="hall" class="form-select"><option value="all">都可以</option>${halls.map((hall) => `<option>${escape(hall)}</option>`).join('')}</select></label></div><button class="button primary form-submit" type="submit" id="random-submit">随机推荐</button></form><div id="random-output" aria-live="polite"></div></div>`, '随机选餐', 'random');
-    Object.entries(randomOptions).forEach(([name, value]) => { $(`#random-form [name="${name}"]`).value = value; });
-  }
-  function chooseRandom() {
-    const values = new FormData($('#random-form'));
-    Object.keys(randomOptions).forEach((name) => { randomOptions[name] = String(values.get(name)); });
-    const candidates = dishes.filter((dish) => Number(rating(dish)) >= 4 && (randomOptions.budget === 'all' || dish.price <= Number(randomOptions.budget)) && (randomOptions.spicy === 'all' || dish.spicy <= Number(randomOptions.spicy)) && (randomOptions.hall === 'all' || dish.hall === randomOptions.hall));
-    if (!candidates.length) {
-      $('#random-output').innerHTML = '<p class="random-empty">暂无符合条件的菜品，请提高预算或更换食堂。</p>';
-      randomLast = null;
-      return;
+  function chooseRandom(fresh=false) {
+    if(fresh)randomLast=null;
+    const candidates=filterDishes().filter((d)=>Number(rating(d))>=4);
+    if(!candidates.length) {
+      openModal('<div class="dialog-pad"><h2 class="dialog-title">暂时没有合适的推荐</h2><p class="random-empty">当前条件下没有4分以上的菜，放宽筛选再试试。</p><button class="button primary form-submit" data-action="change-filters">修改筛选</button></div>','帮我选','random');return;
     }
-    const pool = candidates.length > 1 ? candidates.filter((dish) => dish.id !== randomLast) : candidates;
-    const dish = pool[Math.floor(Math.random() * pool.length)];
-    randomLast = dish.id;
-    $('#random-output').innerHTML = `<div class="random-result"><div class="random-result-main"><img src="./assets/${dish.image}.jpg" alt="${escape(dish.name)}的食物示意图" width="130" height="155"><div><span class="random-result-label">${candidates.length === 1 ? '符合条件的只有这一道' : '推荐菜品'}</span><h3>${escape(dish.name)}</h3><p>${escape(dish.hall)} · ${escape(dish.floor)}${escape(dish.stall.split('·')[0])}</p><p>¥${dish.price} / 份 · ★ ${rating(dish)} · 约${dish.wait}分钟</p><p>${escape(dish.note)}</p></div></div><div class="random-actions"><button class="button outline" data-action="reroll">${candidates.length === 1 ? '查看当前条件' : '换一道'}</button><button class="button primary" data-dish="${dish.id}">查看详情</button></div></div>`;
-    $('#random-submit').textContent = '重新推荐';
+    const pool=candidates.length>1?candidates.filter((d)=>d.id!==randomLast):candidates;
+    const d=pool[Math.floor(Math.random()*pool.length)];randomLast=d.id;
+    const hint=[state.hall==='all'?'全部食堂':state.hall,state.price==='all'?'不限预算':state.price+'元以内'];
+    openModal('<div class="dialog-pad"><h2 class="dialog-title">试试这道</h2><img class="random-photo" src="./assets/'+d.image+'.jpg" alt="'+escape(d.name)+'的食物示意图"><div class="random-title"><h3>'+escape(d.name)+'</h3><span class="dish-price"><small>¥</small>'+d.price+'</span></div><p class="random-location">'+escape(d.hall)+' · '+escape(d.floor)+' · '+escape(d.stall.split('·')[0])+'</p><p class="detail-note">'+escape(d.note)+'</p><div class="random-actions"><button class="button secondary" data-action="'+(candidates.length===1?'change-filters':'reroll')+'">'+(candidates.length===1?'修改筛选':'换一道')+'</button><button class="button primary" data-dish="'+d.id+'">查看详情</button></div><p class="fineprint">'+escape(hint.join(' · '))+' · 4分以上'+(candidates.length===1?'，仅这道符合条件':'')+'</p></div>','帮我选：'+d.name,'random');
   }
   function openAbout() {
-    openModal('<div class="dialog-pad"><h2 class="dialog-title">使用说明</h2><div class="about-copy"><p><strong>选菜：</strong>按食堂、类型和预算筛选，或使用随机选餐。</p><p><strong>收藏与点评：</strong>仅保存在当前浏览器，清理浏览器数据后会丢失。</p><p><strong>数据说明：</strong>校园、菜品和评分为展示数据，图片为食物配图。</p><p>图片来源：<a href="https://unsplash.com/" target="_blank" rel="noopener noreferrer">Unsplash</a></p></div><button class="button dark form-submit" data-action="close">关闭</button></div>', '使用说明', 'about');
+    openModal('<div class="dialog-pad"><h2 class="dialog-title">关于这个演示</h2><div class="about-copy"><p><strong>示例数据</strong><br>学校、食堂、菜品、价格与点评为演示内容，图片来自 Unsplash 和 Wikimedia Commons，仅作食物示意。<a href="./assets/photo-sources.txt" target="_blank" rel="noopener noreferrer">图片来源与授权</a>。</p><p><strong>本机记录</strong><br>收藏和你的点评保存在当前浏览器。换设备或清除浏览器数据后，不会保留。</p></div><button class="button primary form-submit" data-action="close">知道了</button></div>','演示说明','about');
   }
-
-  document.addEventListener('click', (event) => {
-    const target = event.target.closest('button');
-    if (!target) return;
-    if (target.dataset.save) { toggleSaved(target.dataset.save); return; }
-    if (target.dataset.dish) { openDetail(target.dataset.dish); return; }
-    if (target.dataset.view) { navigate(target.dataset.view); return; }
-    if (target.dataset.hall) { state.hall = target.dataset.hall; render(true); return; }
-    if (target.dataset.rank) { state.rank = target.dataset.rank; render(true); return; }
-    if (target.dataset.shortcut) {
-      if (target.dataset.shortcut === 'budget') state.price = state.price === '12' ? 'all' : '12';
-      else state.shortcut = state.shortcut === target.dataset.shortcut ? '' : target.dataset.shortcut;
-      render(true);
-      if (!target.closest('.filter-panel')) $('#explore').scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-      return;
+  document.addEventListener('click',(event)=>{
+    const button=event.target.closest('button');if(!button)return;
+    if(button.dataset.save){toggleSaved(button.dataset.save);return;}
+    if(button.dataset.dish){openDetail(button.dataset.dish);return;}
+    if(button.dataset.view){navigate(button.dataset.view);return;}
+    if(button.dataset.deleteReview){
+      const item=button.closest('.review-item');button.hidden=true;
+      item.insertAdjacentHTML('beforeend','<div class="delete-confirm" role="group" aria-label="删除点评确认"><span>删除这条点评？</span><button class="button secondary" data-cancel-delete>取消</button><button class="button primary" data-confirm-delete="'+escape(button.dataset.deleteReview)+'">删除</button></div>');
+      item.querySelector('[data-cancel-delete]').focus();return;
     }
-    if (target.dataset.deleteReview) {
-      const item = target.closest('.review-item');
-      target.hidden = true;
-      item.insertAdjacentHTML('beforeend', `<div class="review-delete-confirm" role="group" aria-label="删除点评确认"><span>删除这条点评？</span><button class="button outline" data-cancel-delete="${escape(target.dataset.deleteReview)}">取消</button><button class="button primary" data-confirm-delete="${escape(target.dataset.deleteReview)}">确认删除</button></div>`);
-      item.querySelector('[data-cancel-delete]').focus();
-      return;
-    }
-    if (target.dataset.cancelDelete) {
-      const item = target.closest('.review-item');
-      const deleteButton = item.querySelector('[data-delete-review]');
-      item.querySelector('.review-delete-confirm').remove();
-      deleteButton.hidden = false;
-      deleteButton.focus();
-      return;
-    }
-    if (target.dataset.confirmDelete) {
-      reviews = reviews.filter(review => review.id !== target.dataset.confirmDelete);
-      const persisted = persist();
-      render();
-      openDetail(detailId, true);
-      if (persisted) toast('已删除点评');
-      return;
-    }
-    switch (target.dataset.action) {
-      case 'close': closeModal(); break;
-      case 'review': openReview(target.dataset.reviewDish); break;
-      case 'random': openRandom(); break;
-      case 'reroll': if ($('#random-output .random-result-label')?.textContent.includes('只有')) $('#random-form select').focus(); else chooseRandom(); break;
-      case 'about': openAbout(); break;
-      case 'clear': resetFilters(); render(true); break;
-      case 'discover': navigate('discover'); break;
-      case 'caution': state.rank = 'caution'; state.view = 'ranking'; resetFilters(); render(true); $('#explore').scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); break;
+    if(button.hasAttribute('data-cancel-delete')){const item=button.closest('.review-item');item.querySelector('.delete-confirm').remove();item.querySelector('[data-delete-review]').hidden=false;item.querySelector('[data-delete-review]').focus();return;}
+    if(button.dataset.confirmDelete){reviews=reviews.filter((r)=>r.id!==button.dataset.confirmDelete);const persisted=persist();render();openDetail(detailId,true);if(persisted)toast('已删除点评');return;}
+    if(button.id==='filter-toggle'){setFiltersOpen($('#extra-filters').hidden);return;}
+    switch(button.dataset.action) {
+      case 'close':closeModal();break;
+      case 'random':chooseRandom(true);break;
+      case 'reroll':chooseRandom();break;
+      case 'review':openReview(button.dataset.reviewDish);break;
+      case 'about':openAbout();break;
+      case 'more':state.limit+=6;render();$('#dish-grid .dish-card:nth-child('+(state.limit-5)+') .dish-main')?.focus({preventScroll:true});break;
+      case 'clear':resetFilters();render(true);break;
+      case 'discover':navigate(state.view==='saved'?lastView:'discover');break;
+      case 'change-filters':closeModal();setFiltersOpen(true);$('#hall-filter').focus();break;
     }
   });
-  document.addEventListener('submit', (event) => {
-    if (event.target.id === 'review-form') { event.preventDefault(); submitReview(event.target); }
-    if (event.target.id === 'random-form') { event.preventDefault(); chooseRandom(); }
-  });
-  $('#search-input').addEventListener('input', (event) => { state.query = event.target.value; render(); });
-  [['#category-filter', 'category'], ['#price-filter', 'price'], ['#sort-filter', 'sort']].forEach(([selector, name]) => $(selector).addEventListener('change', (event) => { state[name] = event.target.value; render(true); }));
-  document.addEventListener('input', (event) => {
-    if (event.target.id === 'review-text') { $('#review-counter').textContent = `${event.target.value.length} / 300`; $('#review-error').classList.remove('form-error'); $('#review-error').textContent = '5—300个字'; $('#review-text').removeAttribute('aria-invalid'); }
-  });
-  dialog.addEventListener('click', (event) => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeModal(); } });
-  dialog.addEventListener('close', () => { document.body.style.overflow = ''; modalType = ''; (modalTrigger?.isConnected ? modalTrigger : $('.nav-item.active'))?.focus({ preventScroll: true }); });
-  dialog.addEventListener('cancel', () => { document.body.style.overflow = ''; modalType = ''; });
-  document.addEventListener('error', (event) => {
-    if (event.target instanceof HTMLImageElement && !event.target.dataset.fallback) { event.target.dataset.fallback = 'true'; event.target.src = './assets/rice.jpg'; }
-  }, true);
-  $('#budget-list').innerHTML = dishes.filter((dish) => dish.price <= 12 && Number(rating(dish)) >= 4).sort((a, b) => a.price - b.price).slice(0, 3).map((dish) => `<button class="budget-item" data-dish="${dish.id}"><img src="./assets/${dish.image}.jpg" alt="" width="56" height="56" loading="lazy"><span><strong>${escape(dish.name)}</strong><small>${escape(dish.hall)} · ${dish.wait}分钟出餐</small></span><b>¥${dish.price}</b></button>`).join('');
-  window.addEventListener('popstate', () => { restoreURL(); render(); });
-  restoreURL();
-  render();
+  document.addEventListener('submit',(event)=>{if(event.target.id==='review-form'){event.preventDefault();submitReview(event.target);}});
+  ['hall','price','category','spicy','sort'].forEach((name)=>$('#'+name+'-filter').addEventListener('change',(event)=>{state[name]=event.target.value;state.limit=6;render(true);}));
+  $('#fast-filter').addEventListener('change',(event)=>{state.fast=event.target.checked;state.limit=6;render(true);});
+  $('#search-input').addEventListener('input',(event)=>{state.query=event.target.value;state.limit=6;render();});
+  document.addEventListener('input',(event)=>{if(event.target.id==='review-text'){$('#review-counter').textContent=event.target.value.length+' / 300';$('#review-error').classList.remove('form-error');}});
+  dialog.addEventListener('close',restoreModalFocus);
+  dialog.addEventListener('click',(event)=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)closeModal();}});
+  document.addEventListener('error',(event)=>{if(event.target instanceof HTMLImageElement&&!event.target.dataset.fallback){event.target.dataset.fallback='true';event.target.src='./assets/rice.jpg';}},true);
+  window.addEventListener('popstate',()=>{if(dialog.open)closeModal();restoreURL();render();});
+  restoreURL();render();
 })();

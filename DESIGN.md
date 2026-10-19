@@ -2,12 +2,12 @@
 
 本项目是供学生在饭点快速选餐的中文工具。优先保障可读性、容易点击、明确的选择状态和即时反馈。
 
-参考 skill：[UI UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)。已运行 `food delivery app --design-system`、`Chinese simplified mobile --domain typography`、`touch target feedback --domain ux`。餐饮结果提供暖色、产品型布局方向；中文字体检索命中 Noto Sans SC。最终规范基于实际中文内容调整，不采用英文餐厅营销页的衬线标题、转化漏斗和无关蓝色 CTA。
+参考 skill：[UI UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)。已运行 `food delivery app --design-system`、`Chinese simplified mobile --domain typography`、`touch target feedback --domain ux`。餐饮检索提供产品型布局方向，中文字体检索命中 Noto Sans SC。当前按用户的换色要求使用清爽雾蓝风格；保留既有字号、控件尺寸和视觉对齐规则。
 
 ## 颜色与字体
 
-- 画布 `#F7F8FA`，面板 `#FFFFFF`，主文字 `#20242B`，次文字 `#626B78`。
-- 主色 `#C94322`，主色浅底 `#FFF1EA`，主按钮使用白字；绿色仅表示“上新”等语义状态。
+- 画布 `#F4F7FC`，面板 `#FFFFFF`，主文字 `#25324A`，次文字 `#5E6C83`。
+- 主色 `#3F5FC9`，主色浅底 `#EBF0FF`，主按钮使用白字；首屏浅雾蓝 `#EEF3FC`。金色星标、绿色上新和琥珀色提醒分别表达评分、上新与注意事项。
 - 字体优先使用本机苹方、思源黑体 / Noto Sans SC、微软雅黑；不依赖远程字体以保证中文首屏正常加载。
 - 正文 16px / 1.65；辅助信息 14px；最小徽标文字 13px。桌面标题 40px，手机标题 30px；菜名桌面 18px、手机 16px / 600。
 - 正文不使用负字距。标题不过度压缩，也不模拟不存在的极粗字重。

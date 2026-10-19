@@ -16,7 +16,7 @@
   const dialog = $('#main-dialog');
   const dialogContent = $('#dialog-content');
   const bookmarkIcon = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3h10v14l-5-3-5 3Z"/></svg>';
-  let toastTimer, detailId = null, randomLast = null, modalType = '';
+  let toastTimer, detailId = null, randomLast = null, modalType = '', modalTrigger = null;
   const randomOptions = { budget: '20', spicy: 'all', hall: 'all' };
 
   function toast(message) {
@@ -32,7 +32,7 @@
       return true;
     } catch {
       persistenceFailed = true;
-      toast('保存失败，请允许浏览器存储后重试。');
+      toast('未能保存，本次修改仅在当前页面保留。请检查浏览器存储权限。');
       return false;
     }
   }
@@ -47,7 +47,7 @@
     return dishes.filter((dish) => {
       if (state.view === 'saved' && !saved.includes(dish.id)) return false;
       if (state.view === 'new' && !dish.isNew) return false;
-      if (state.view === 'ranking' && state.rank === 'caution' && Number(rating(dish)) >= 4) return false;
+      if (state.view === 'ranking' && (state.rank === 'caution' ? Number(rating(dish)) >= 4 : Number(rating(dish)) < 4)) return false;
       if (state.hall !== 'all' && dish.hall !== state.hall) return false;
       if (state.category !== 'all' && dish.category !== state.category) return false;
       if (state.price !== 'all' && dish.price > Number(state.price)) return false;
@@ -65,9 +65,45 @@
     const isSaved = saved.includes(dish.id);
     const caution = state.view === 'ranking' && state.rank === 'caution';
     const badge = caution ? '<span class="dish-badge caution">注意事项</span>' : dish.isNew ? '<span class="dish-badge new">食堂上新</span>' : dish.price <= 12 ? '<span class="dish-badge">12元以内</span>' : '';
-    return `<article class="dish-card"><button class="bookmark ${isSaved ? 'saved' : ''}" data-save="${dish.id}" aria-label="${isSaved ? '取消收藏' : '收藏'}${escape(dish.name)}" aria-pressed="${isSaved}">${bookmarkIcon}</button><button class="dish-main" data-dish="${dish.id}" aria-label="查看${escape(dish.name)}详情"><div class="dish-image"><img src="./assets/${dish.image}.jpg" alt="${escape(dish.name)}的食物示意照片" width="900" height="600" loading="lazy">${badge}</div><div class="dish-info"><div class="dish-title-row"><h3>${escape(dish.name)}</h3><span class="rating"><small>★</small>${rating(dish)}</span></div><p class="dish-location">${escape(dish.hall)} · ${escape(dish.floor)}${escape(dish.stall.split('·')[0])}</p><div class="dish-tags">${dish.tags.slice(0, 2).map((tag) => `<span>${escape(tag)}</span>`).join('')}</div><div class="dish-bottom"><span class="dish-price"><small>¥</small>${dish.price}<em>/份</em></span><span class="dish-wait">约${dish.wait}分钟 · ${dish.reviewCount + ownReviews(dish.id).length}条点评</span></div>${caution ? `<p class="dish-caution">${escape(dish.caution)}</p>` : ''}</div></button></article>`;
+    return `<article class="dish-card"><button class="bookmark ${isSaved ? 'saved' : ''}" data-save="${dish.id}" aria-label="${isSaved ? '取消收藏' : '收藏'}${escape(dish.name)}" aria-pressed="${isSaved}">${bookmarkIcon}</button><button class="dish-main" data-dish="${dish.id}" aria-label="查看${escape(dish.name)}详情"><div class="dish-image"><img src="./assets/${dish.image}.jpg" alt="${escape(dish.name)}的食物示意照片" width="900" height="600" loading="lazy">${badge}</div><div class="dish-info"><div class="dish-title-row"><h3>${escape(dish.name)}</h3></div><div class="dish-social"><span class="rating"><small aria-hidden="true">★</small>${rating(dish)}</span><span class="review-count">${dish.reviewCount + ownReviews(dish.id).length}条点评</span></div><p class="dish-location">${escape(dish.hall)} · ${escape(dish.floor)}${escape(dish.stall.split('·')[0])}</p><div class="dish-tags">${dish.tags.slice(0, 2).map((tag) => `<span>${escape(tag)}</span>`).join('')}</div><div class="dish-bottom"><span class="dish-price"><small>¥</small>${dish.price}<em>/份</em></span><span class="dish-wait">约${dish.wait}分钟出餐</span></div>${caution ? `<p class="dish-caution">${escape(dish.caution)}</p>` : ''}</div></button></article>`;
   }
-  function render() {
+  function syncControls() {
+    if ($('#search-input').value !== state.query) $('#search-input').value = state.query;
+    $('#category-filter').value = state.category;
+    $('#price-filter').value = state.price;
+    $('#sort-filter').value = state.sort;
+  }
+  function restoreURL() {
+    const params = new URLSearchParams(window.location.search);
+    const allowed = {
+      view: ['discover', 'ranking', 'new', 'saved'],
+      hall: ['all', ...halls], category: ['all', ...new Set(dishes.map(dish => dish.category))],
+      price: ['all', '12', '15', '20'], sort: ['recommended', 'price', 'wait'],
+      shortcut: ['', 'fast', 'mild'], rank: ['good', 'caution']
+    };
+    const defaults = { view: 'discover', hall: 'all', category: 'all', price: 'all', sort: 'recommended', shortcut: '', rank: 'good' };
+    for (const [name, values] of Object.entries(allowed)) {
+      const value = params.get(name);
+      state[name] = values.includes(value) ? value : defaults[name];
+    }
+    state.query = (params.get('q') || '').slice(0, 200);
+    syncControls();
+  }
+  function syncURL(push) {
+    const url = new URL(window.location.href);
+    const defaults = { view: 'discover', hall: 'all', category: 'all', price: 'all', sort: 'recommended', shortcut: '', rank: 'good' };
+    for (const [name, value] of Object.entries(defaults)) {
+      if (state[name] === value) url.searchParams.delete(name);
+      else url.searchParams.set(name, state[name]);
+    }
+    if (state.query) url.searchParams.set('q', state.query);
+    else url.searchParams.delete('q');
+    if (url.href !== window.location.href) window.history[push ? 'pushState' : 'replaceState'](null, '', url);
+  }
+  function render(pushHistory = false) {
+    syncControls();
+    syncURL(pushHistory);
+    $('#hero').hidden = state.view !== 'discover';
     const titles = {
       discover: ['按条件选菜', '全部菜品'],
       ranking: ['按评分排序', state.rank === 'caution' ? '低分菜品' : '高分推荐'],
@@ -88,6 +124,11 @@
     $$('[data-hall]').forEach((button) => { button.classList.toggle('selected', button.dataset.hall === state.hall); button.setAttribute('aria-pressed', String(button.dataset.hall === state.hall)); });
     $$('[data-rank]').forEach((button) => { button.classList.toggle('selected', button.dataset.rank === state.rank); button.setAttribute('aria-pressed', String(button.dataset.rank === state.rank)); });
     $('#saved-count').textContent = saved.length || '';
+    $$('.quick-links [data-shortcut]').forEach(button => {
+      const selected = button.dataset.shortcut === 'budget' ? state.price === '12' : state.shortcut === button.dataset.shortcut;
+      button.classList.toggle('selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
     const filters = [];
     if (state.hall !== 'all') filters.push(state.hall);
     if (state.category !== 'all') filters.push(state.category);
@@ -115,30 +156,35 @@
     state.view = view;
     state.rank = 'good';
     resetFilters();
-    render();
+    render(true);
     $('#explore').scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   }
   function toggleSaved(id) {
     const dish = findDish(id);
     if (!dish) return;
-    const restoreFocus = document.activeElement?.dataset.save === String(dish.id);
-    const focusInDialog = dialog.contains(document.activeElement);
     const wasSaved = saved.includes(dish.id);
-    saved = wasSaved ? saved.filter((value) => value !== dish.id) : [...saved, dish.id];
+    saved = wasSaved ? saved.filter(value => value !== dish.id) : [...saved, dish.id];
     const persisted = persist();
-    render();
-    if (modalType === 'detail' && detailId === dish.id) openDetail(dish.id, true);
-    if (restoreFocus) {
-      const nextFocus = focusInDialog ? dialog.querySelector(`[data-save="${dish.id}"]`) : $(`#dish-grid [data-save="${dish.id}"]`) || $('#dish-grid .empty-state button') || $('.nav-item.active');
-      nextFocus?.focus({ preventScroll: true });
+    $('#saved-count').textContent = saved.length || '';
+    if (state.view === 'saved') {
+      render();
+      if (!dialog.open) ($(`#dish-grid [data-save="${dish.id}"]`) || $('#dish-grid .bookmark') || $('#dish-grid .empty-state button'))?.focus({ preventScroll: true });
     }
+    $$(`[data-save="${dish.id}"]`).forEach(button => {
+      const selected = saved.includes(dish.id);
+      button.setAttribute('aria-pressed', String(selected));
+      if (button.classList.contains('bookmark')) {
+        button.classList.toggle('saved', selected);
+        button.setAttribute('aria-label', `${selected ? '取消收藏' : '收藏'}${dish.name}`);
+      } else button.textContent = selected ? '取消收藏' : '收藏菜品';
+    });
     if (persisted) toast(wasSaved ? '已取消收藏' : '已收藏');
   }
   function openModal(html, label, type) {
     modalType = type;
     dialogContent.innerHTML = html;
     dialog.setAttribute('aria-label', label);
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) { modalTrigger = document.activeElement; dialog.showModal(); }
     else dialog.querySelector('.dialog-close').focus({ preventScroll: true });
     document.body.style.overflow = 'hidden';
     dialog.scrollTop = 0;
@@ -164,7 +210,7 @@
   }
   function openReview(id) {
     const selected = findDish(id);
-    openModal(`<div class="dialog-pad"><h2 class="dialog-title">写点评</h2><p class="dialog-subtitle">说说口味、分量和等餐体验。</p><form id="review-form"><div class="form-field"><label class="field-label" for="review-dish">选择菜品</label><select class="form-select" id="review-dish" name="dishId" required>${dishes.map((dish) => `<option value="${dish.id}" ${dish.id === selected?.id ? 'selected' : ''}>${escape(dish.name)} · ${escape(dish.hall)}</option>`).join('')}</select></div><div class="form-field"><fieldset style="border:0;padding:0;margin:0"><legend class="field-label">评分</legend><div class="score-picker">${['不推荐', '有点失望', '还行', '值得吃', '会再来'].map((label, index) => `<label><input type="radio" name="rating" value="${index + 1}" ${index === 3 ? 'checked' : ''} required><span>${index + 1}<small>${label}</small></span></label>`).join('')}</div></fieldset></div><div class="form-field"><label class="field-label" for="review-text">点评内容</label><textarea class="review-textarea" id="review-text" name="text" minlength="5" maxlength="300" placeholder="例如：分量足，口味偏咸，等餐约8分钟。" required></textarea><div class="counter-row"><span id="review-error" role="alert">5—300个字</span><span id="review-counter">0 / 300</span></div></div><p class="form-disclaimer">点评仅保存在当前浏览器，清理浏览器数据后会丢失。</p><button class="button primary form-submit" type="submit">保存点评</button></form></div>`, '写一条点评', 'review');
+    openModal(`<div class="dialog-pad"><h2 class="dialog-title">写点评</h2><p class="dialog-subtitle">说说口味、分量和等餐体验。</p><form id="review-form"><div class="form-field"><label class="field-label" for="review-dish">选择菜品</label><select class="form-select" id="review-dish" name="dishId" required>${dishes.map((dish) => `<option value="${dish.id}" ${dish.id === selected?.id ? 'selected' : ''}>${escape(dish.name)} · ${escape(dish.hall)}</option>`).join('')}</select></div><div class="form-field"><fieldset style="border:0;padding:0;margin:0"><legend class="field-label">评分</legend><div class="score-picker">${['不推荐', '有点失望', '还行', '值得吃', '会再来'].map((label, index) => `<label><input type="radio" name="rating" value="${index + 1}" ${index === 3 ? 'checked' : ''} required><span>${index + 1}<small>${label}</small></span></label>`).join('')}</div></fieldset></div><div class="form-field"><label class="field-label" for="review-text">点评内容</label><textarea class="review-textarea" id="review-text" name="text" minlength="5" maxlength="300" aria-describedby="review-error" placeholder="例如：分量足，口味偏咸，等餐约8分钟。" required></textarea><div class="counter-row"><span id="review-error" role="alert">5—300个字</span><span id="review-counter">0 / 300</span></div></div><p class="form-disclaimer">点评仅保存在当前浏览器，清理浏览器数据后会丢失。</p><button class="button primary form-submit" type="submit">保存点评</button></form></div>`, '写一条点评', 'review');
   }
   function submitReview(form) {
     const values = new FormData(form);
@@ -174,6 +220,8 @@
     if (!dish || !Number.isInteger(score) || score < 1 || score > 5 || text.length < 5 || text.length > 300) {
       $('#review-error').textContent = '请选择菜品并填写5—300个字的点评。';
       $('#review-error').classList.add('form-error');
+      $('#review-text').setAttribute('aria-invalid', 'true');
+      $('#review-text').focus();
       return;
     }
     if (reviews.length >= 200) { toast('本机已保存200条点评，请先删除一些旧记录。'); return; }
@@ -214,21 +262,36 @@
     if (target.dataset.save) { toggleSaved(target.dataset.save); return; }
     if (target.dataset.dish) { openDetail(target.dataset.dish); return; }
     if (target.dataset.view) { navigate(target.dataset.view); return; }
-    if (target.dataset.hall) { state.hall = target.dataset.hall; render(); return; }
-    if (target.dataset.rank) { state.rank = target.dataset.rank; render(); return; }
+    if (target.dataset.hall) { state.hall = target.dataset.hall; render(true); return; }
+    if (target.dataset.rank) { state.rank = target.dataset.rank; render(true); return; }
     if (target.dataset.shortcut) {
-      navigate('discover');
-      if (target.dataset.shortcut === 'budget') { state.price = '12'; $('#price-filter').value = '12'; }
-      else state.shortcut = target.dataset.shortcut;
-      render();
+      if (target.dataset.shortcut === 'budget') state.price = state.price === '12' ? 'all' : '12';
+      else state.shortcut = state.shortcut === target.dataset.shortcut ? '' : target.dataset.shortcut;
+      render(true);
+      if (!target.closest('.filter-panel')) $('#explore').scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
       return;
     }
     if (target.dataset.deleteReview) {
-      reviews = reviews.filter((review) => review.id !== target.dataset.deleteReview);
+      const item = target.closest('.review-item');
+      target.hidden = true;
+      item.insertAdjacentHTML('beforeend', `<div class="review-delete-confirm" role="group" aria-label="删除点评确认"><span>删除这条点评？</span><button class="button outline" data-cancel-delete="${escape(target.dataset.deleteReview)}">取消</button><button class="button primary" data-confirm-delete="${escape(target.dataset.deleteReview)}">确认删除</button></div>`);
+      item.querySelector('[data-cancel-delete]').focus();
+      return;
+    }
+    if (target.dataset.cancelDelete) {
+      const item = target.closest('.review-item');
+      const deleteButton = item.querySelector('[data-delete-review]');
+      item.querySelector('.review-delete-confirm').remove();
+      deleteButton.hidden = false;
+      deleteButton.focus();
+      return;
+    }
+    if (target.dataset.confirmDelete) {
+      reviews = reviews.filter(review => review.id !== target.dataset.confirmDelete);
       const persisted = persist();
       render();
       openDetail(detailId, true);
-      if (persisted) toast('已删除这条本机点评。');
+      if (persisted) toast('已删除点评');
       return;
     }
     switch (target.dataset.action) {
@@ -237,9 +300,9 @@
       case 'random': openRandom(); break;
       case 'reroll': if ($('#random-output .random-result-label')?.textContent.includes('只有')) $('#random-form select').focus(); else chooseRandom(); break;
       case 'about': openAbout(); break;
-      case 'clear': resetFilters(); render(); break;
+      case 'clear': resetFilters(); render(true); break;
       case 'discover': navigate('discover'); break;
-      case 'caution': navigate('ranking'); state.rank = 'caution'; render(); break;
+      case 'caution': state.rank = 'caution'; state.view = 'ranking'; resetFilters(); render(true); $('#explore').scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }); break;
     }
   });
   document.addEventListener('submit', (event) => {
@@ -247,16 +310,18 @@
     if (event.target.id === 'random-form') { event.preventDefault(); chooseRandom(); }
   });
   $('#search-input').addEventListener('input', (event) => { state.query = event.target.value; render(); });
-  [['#category-filter', 'category'], ['#price-filter', 'price'], ['#sort-filter', 'sort']].forEach(([selector, name]) => $(selector).addEventListener('change', (event) => { state[name] = event.target.value; render(); }));
+  [['#category-filter', 'category'], ['#price-filter', 'price'], ['#sort-filter', 'sort']].forEach(([selector, name]) => $(selector).addEventListener('change', (event) => { state[name] = event.target.value; render(true); }));
   document.addEventListener('input', (event) => {
-    if (event.target.id === 'review-text') { $('#review-counter').textContent = `${event.target.value.length} / 300`; $('#review-error').classList.remove('form-error'); }
+    if (event.target.id === 'review-text') { $('#review-counter').textContent = `${event.target.value.length} / 300`; $('#review-error').classList.remove('form-error'); $('#review-error').textContent = '5—300个字'; $('#review-text').removeAttribute('aria-invalid'); }
   });
   dialog.addEventListener('click', (event) => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeModal(); } });
-  dialog.addEventListener('close', () => { document.body.style.overflow = ''; modalType = ''; });
+  dialog.addEventListener('close', () => { document.body.style.overflow = ''; modalType = ''; (modalTrigger?.isConnected ? modalTrigger : $('.nav-item.active'))?.focus({ preventScroll: true }); });
   dialog.addEventListener('cancel', () => { document.body.style.overflow = ''; modalType = ''; });
   document.addEventListener('error', (event) => {
     if (event.target instanceof HTMLImageElement && !event.target.dataset.fallback) { event.target.dataset.fallback = 'true'; event.target.src = './assets/rice.jpg'; }
   }, true);
   $('#budget-list').innerHTML = dishes.filter((dish) => dish.price <= 12 && Number(rating(dish)) >= 4).sort((a, b) => a.price - b.price).slice(0, 3).map((dish) => `<button class="budget-item" data-dish="${dish.id}"><img src="./assets/${dish.image}.jpg" alt="" width="56" height="56" loading="lazy"><span><strong>${escape(dish.name)}</strong><small>${escape(dish.hall)} · ${dish.wait}分钟出餐</small></span><b>¥${dish.price}</b></button>`).join('');
+  window.addEventListener('popstate', () => { restoreURL(); render(); });
+  restoreURL();
   render();
 })();
